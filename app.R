@@ -4,130 +4,99 @@ library(ggplot2)
 library(jsonlite)
 library(dplyr)
 library(stringr)
-library(plotly)
+library(shinydashboard)
+library(curl)
+
 #DATA-------------
 
-#---
-# Load Data:
-#---
+Por_Regiao <- jsonlite::fromJSON("http://api.sidra.ibge.gov.br/values/t/3653/n1/all/n3/all/v/3139,3140,4139/p/all/c544/129314,129315,129316/d/v3139%201,v3140%201,v4139%201")
+colnames(Por_Regiao) <-  as.character(unlist(Por_Regiao[1,]))
+Por_Regiao = Por_Regiao[-1, ]
+Por_Regiao <- Por_Regiao %>% select("Brasil e Unidade da Federação (Código)", 
+                                    "Brasil e Unidade da Federação", 
+                                    "Variável (Código)", 
+                                    "Variável", 
+                                    "Mês (Código)", 
+                                    "Mês", 
+                                    "Seções e atividades industriais (CNAE 2.0) (Código)", 
+                                    "Seções e atividades industriais (CNAE 2.0)", 
+                                    "Unidade de Medida (Código)", 
+                                    "Unidade de Medida", 
+                                    "Valor")
+colnames(Por_Regiao) <- c("UNID.DA.FEDER.COD", "UF", "VAR.COD", "VAR", "MES.COD", "DATA", 
+                          "GRUP.COD", "GRUP.IND", "MED.COD", "MED", "VALOR")
+Por_Regiao$VALOR <- as.numeric(Por_Regiao$VALOR)
 
-Por_grupo <- jsonlite::fromJSON("http://api.sidra.ibge.gov.br/values/t/3650/n1/all/v/3139,3140,3141/p/all/c542/all/d/v3139%201,v3140%201,v3141%201")
-colnames(Por_grupo) <- as.character(unlist(Por_grupo[1,]))
-Por_grupo = Por_grupo[-1, ]
-colnames(Por_grupo) <- c("BRA.COD", "BRASIL", "VAR.COD", "VAR", "MES.COD", "DATA",
-                         "GRUPOS.IND.COD", "GRUPOS.IND", "UNIDAD.VALOR", "UNIDAD.MEDIDA", "VALOR")
+Por_Regiao$MES.COD <- as.character(Por_Regiao$MES.COD)
 
-Por_categoria <- jsonlite::fromJSON("http://api.sidra.ibge.gov.br/values/t/3651/n1/all/v/3139,3140,3141,4139/p/all/c543/all/d/v3139%201,v3140%201,v3141%201,v4139%201")
-colnames(Por_categoria) <-  as.character(unlist(Por_categoria[1,]))
-Por_categoria = Por_categoria[-1, ]
-colnames(Por_categoria) <- c("BRA.COD", "BRASIL", "VAR.COD", "VAR", "MES.COD", "DATA",
-                             "GRUPOS.IND.COD", "GRUPOS.IND", "UNIDAD.VALOR", "UNIDAD.MEDIDA", "VALOR")
-
-Categorias_especiais <- jsonlite::fromJSON("http://api.sidra.ibge.gov.br/values/t/6607/n1/all/v/3139,3140,3141/p/all/c25/all/d/v3139%201,v3140%201,v3141%201")
-colnames(Categorias_especiais) <-  as.character(unlist(Categorias_especiais[1,]))
-Categorias_especiais = Categorias_especiais[-1, ]
-colnames(Categorias_especiais) <- c("BRA.COD", "BRASIL", "VAR.COD", "VAR", "MES.COD", "DATA",
-                                    "GRUPOS.IND.COD", "GRUPOS.IND", "UNIDAD.VALOR", "UNIDAD.MEDIDA", "VALOR")
-#---
-# New Var:
-#---  
-
-Por_categoria$tab_name <- "Por categoria"
-Por_grupo$tab_name <- "Por grupo"
-Categorias_especiais$tab_name <- "Por categorias especiais"
-
-#---
-# Join data:
-#---
-
-INDUSTRIA <- rbind(Por_categoria, Por_grupo)
-INDUSTRIA <- rbind(INDUSTRIA, Categorias_especiais)
-
-rm(Categorias_especiais, Por_categoria, Por_grupo)
-
-#---
-# working values:
-#---
-
-INDUSTRIA$VALOR <- as.numeric(INDUSTRIA$VALOR)
-INDUSTRIA$MES.COD <- as.character(INDUSTRIA$MES.COD)
-
-Datas <- INDUSTRIA$MES.COD
+Datas <- Por_Regiao$MES.COD
 meses <- str_sub(Datas, 5, 6)
 str_sub(Datas, 5) <- "-"
 str_sub(Datas, 6) <- meses
 str_sub(Datas, 8) <- "-01"
 Datas <- as.Date(Datas, '%Y-%m-%d')
-INDUSTRIA$MES.COD <- Datas
-names(INDUSTRIA$MES.COD) <- INDUSTRIA$DATA
+Por_Regiao$MES.COD <- Datas
+names(Por_Regiao$MES.COD) <- Por_Regiao$DATA
 rm(Datas, meses)
 
-INDUSTRIA$MANDATO <- ifelse(INDUSTRIA$MES.COD < '2007-01-01', "Lula 1",
-                            ifelse(INDUSTRIA$MES.COD >= '2007-01-01' & INDUSTRIA$MES.COD < '2011-01-01', "Lula 2",
-                                   ifelse(INDUSTRIA$MES.COD >= '2011-01-01' & INDUSTRIA$MES.COD < '2015-01-01', "Dilma 1", 
-                                          ifelse(INDUSTRIA$MES.COD >= '2015-01-01' & INDUSTRIA$MES.COD < '2016-08-01', "Dilma 2",
-                                                 ifelse(INDUSTRIA$MES.COD >= '2016-08-01' & INDUSTRIA$MES.COD < '2019-01-01', "Temer", "Bolsonaro"
-                                                 )))))
+Por_Regiao$MANDATO <- ifelse(Por_Regiao$MES.COD < '2007-01-01', "Lula 1",
+                             ifelse(Por_Regiao$MES.COD >= '2007-01-01' & Por_Regiao$MES.COD < '2011-01-01', "Lula 2",
+                                    ifelse(Por_Regiao$MES.COD >= '2011-01-01' & Por_Regiao$MES.COD < '2015-01-01', "Dilma 1", 
+                                           ifelse(Por_Regiao$MES.COD >= '2015-01-01' & Por_Regiao$MES.COD < '2016-08-01', "Dilma 2",
+                                                  ifelse(Por_Regiao$MES.COD >= '2016-08-01' & Por_Regiao$MES.COD < '2019-01-01', "Temer", "Bolsonaro"
+                                                  )))))
 
-Por_Regiao <- jsonlite::fromJSON("http://api.sidra.ibge.gov.br/values/t/3653/n3/all/v/3139,3140,3141,4139/p/last%201/c544/all/d/v3139%201,v3140%201,v3141%201,v4139%201")
-colnames(Por_Regiao) <-  as.character(unlist(Por_Regiao[1,]))
-Por_Regiao = Por_Regiao[-1, ]
-colnames(Por_Regiao) <- c("UNID.DA.FEDER.COD", "UF", "VAR.COD", "VAR", "MES.COD", "DATA", "GRUP.COD", "GRUP.IND", "MED.COD", "MED", "VALOR")
-Por_Regiao$VALOR <- as.numeric(Por_Regiao$VALOR)
-Por_Regiao$NIVEL <- readr::parse_number(Por_Regiao$GRUP.IND)
-Por_Regiao <- Por_Regiao %>% 
-   mutate(NIVEL, 
-          ifelse(str_count(as.character(NIVEL)) == 1, "Área", 
-                 ifelse(str_count(as.character(NIVEL)) == 3, "Sessão", "Atividade")))
 
-#-APP--------------
-
-ui <- navbarPage("Industria brasileira",
+ui <- dashboardPage(
+   dashboardHeader(title = "Indústria" 
+   ),#dashHEADER
    
-  
-   tabPanel("Histórico",
-   sidebarLayout(
-      sidebarPanel("Escolha as variáveis",
-         selectInput("var",
-                     "Tipo de cálculo", 
-                    choices =   unique(INDUSTRIA$VAR)),
-         selectInput("ativ",
-                     "Atividade industrial", 
-                    choices = unique(INDUSTRIA$GRUPOS.IND))
-      ),
+   dashboardSidebar(
+      menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard"), selected = TRUE),
+      menuItem("Explicação", tabName = "explicacao", icon = icon("th")),
       
-      mainPanel(
-         textOutput("tx1"),
-         plotOutput("IND2"),
-         plotOutput("IND1")
+      selectInput("var", "Variável", unique(Por_Regiao$VAR)),
+      checkboxGroupInput("grupind", "Sessão", unique(Por_Regiao$GRUP.IND), 
+                         selected = unique(Por_Regiao$GRUP.IND)),
+      checkboxGroupInput("gestao", "Gestão", unique(Por_Regiao$MANDATO), 
+                         selected = unique(Por_Regiao$MANDATO)),
+      checkboxGroupInput("uf", "UF", unique(Por_Regiao$UF), 
+                         selected = "Brasil")
       
+   ),#dashSIDEBAR
+   
+   dashboardBody(
+      tabItems(
+         tabItem(tabName = "dashboard", 
+                 fluidRow(
+                    box(collapsible = TRUE, 
+                        plotOutput("pieuf")),
+                    box(collapsible = TRUE,
+                        plotOutput("box"))
+                 ),
+                 fluidRow(
+                    box(collapsible = TRUE,
+                        plotOutput("piegrupind")),
+                    box(collapsible = TRUE,
+                        plotOutput("temp"))
+                 )
+         ),
+         tabItem(tabName = "explicacao"
+                 
          )
-   )
-   ),
-   tabPanel("Por estado e sessão", sidebarLayout( sidebarPanel(
-            selectInput("cat", "Escolha a categoria", choices = unique(Por_Regiao$`ifelse(...)`))
-            ),
-            
-            mainPanel(
-               plotOutput("IND3"), 
-               plotOutput("IND4")
-               
-            ))
+      )#tabITENS
       
    )
-   
-)
-
+)#dashPAGE
 
 server <- function(input, output) {
-  
-
-  
-   output$IND1 <- renderText({a <- "laala"
-   a
-   })
-   output$IND1 <- renderPlot({
-      INDUSTRIA %>% filter(VALOR != "NA", VAR == input$var, GRUPOS.IND == input$ativ) %>%
+   
+   output$box <- renderPlot({
+      Por_Regiao %>% filter(UF == "Brasil",
+                            VALOR != "NA", 
+                            VAR == input$var, 
+                            GRUP.IND == input$grupind, 
+                            MANDATO == input$gestao) %>%
          ggplot(aes(x = MANDATO, y = VALOR)) + geom_boxplot() + 
          scale_x_discrete(limits = c("Lula 1", "Lula 2", "Dilma 1", "Dilma 2", 
                                      "Temer", "Bolsonaro")) +
@@ -135,33 +104,60 @@ server <- function(input, output) {
       
    })
    
-   output$IND2 <- renderPlot({ 
- INDUSTRIA %>% filter(VALOR != "NA", 
-                      VAR == input$var, 
-                      GRUPOS.IND == input$ativ) %>% 
-     ggplot(aes(x = MES.COD, y = VALOR)) + geom_line( 
-                                                       size = 1) + 
-       geom_hline(yintercept = 0, color = 'black', size = 1, linetype = 3) +
-       xlab("Tempo") +
-       scale_x_date() + 
-       theme(axis.text.x = element_text(angle = 90, size = 10)) + theme_light()
-   
+   output$piegrupind <- renderPlot({
       
+      Por_Regiao2 <- Por_Regiao %>% filter(UF == "Brasil",
+                                           VALOR != "NA", 
+                                           VAR == input$var, 
+                                           GRUP.IND != "1 Indústria geral", 
+                                           MANDATO == input$gestao) %>%
+         group_by(GRUP.IND) %>% summarise(n())
+      
+      names(Por_Regiao2) <- c("GRUP.IND2", "NUMERO")
+      
+      Por_Regiao2 %>% 
+         ggplot(aes(x = "", y = NUMERO )) +
+         geom_bar(aes(fill = GRUP.IND2), width = .3, stat = "identity") + 
+         scale_fill_brewer(type = 'div', palette = "Set1") + 
+         labs(title = "Por sessão") +
+         theme_light() + theme(legend.position = "bottom") + coord_polar("y", start=0)
       
    })
-   output$IND3 <- renderPlot({ a <-Por_Regiao %>% filter(`ifelse(...)` == input$cat) %>%
-         ggplot(aes(x = "", y = VALOR, fill = UF)) + geom_col()
    
+   output$pieuf <- renderPlot({
+      
+      Por_Regiao3 <- Por_Regiao %>% filter(UF == input$uf,
+                                           VALOR != "NA", 
+                                           VAR == input$var, 
+                                           GRUP.IND == input$grupind, 
+                                           MANDATO == input$gestao) %>%
+         group_by(UF) %>% summarise(n())
+      
+      names(Por_Regiao3) <- c("UF3", "NUMERO")
+      
+      Por_Regiao3 %>% 
+         ggplot(aes(x = UF3, y = NUMERO )) +
+         geom_bar(stat = "identity", fill = "darkblue", color = "white") + 
+         labs(title = "Por sessão") +
+         theme_light() + theme(axis.text.x = element_text(angle = 90))
+      
    })
-   output$IND4 <- renderPlot({ b <- Por_Regiao %>% filter(`ifelse(...)` == input$cat) %>%
-         ggplot(aes(x = "", y = VALOR, fill = GRUP.IND)) + 
-         geom_bar(width = 1, stat = "identity")
-   pie2 <- b + coord_polar("y", start=0)
-   pie2
+   
+   output$temp <- renderPlot({ 
+      Por_Regiao %>% filter(UF == "Brasil",
+                            VALOR != "NA", 
+                            VAR == input$var, 
+                            GRUP.IND == input$grupind,
+                            MANDATO == input$gestao) %>% 
+         ggplot(aes(x = MES.COD, y = VALOR)) + geom_line(size = 1, color = "darkgray") + 
+         geom_hline(yintercept = 0, color = 'black', size = 1, linetype = 3) +
+         xlab("Tempo") +
+         scale_x_date() + 
+         theme(axis.text.x = element_text(angle = 90, size = 10)) + theme_light()
    })
+   
+   
    
 }
 
-
 shinyApp(ui = ui, server = server)
-
